@@ -1,0 +1,4 @@
+.env
+config.json
+/commands/vtuber/
+/node_modules/

@@ -1,0 +1,46 @@
+const fs = require('fs');
+const { EmbedBuilder } = require('discord.js'); // Remplacer MessageEmbed par EmbedBuilder
+
+// Charger la configuration de logSettings.json
+const logSettings = JSON.parse(fs.readFileSync('../../logSettings.json', 'utf8'));
+
+module.exports = async (client, oldMember, newMember) => {
+    // Vérifier si le membre a changé de pseudo
+    if (!oldMember.nickname && !newMember.nickname || oldMember.nickname === newMember.nickname) {
+        return; // Si le pseudo n'a pas changé, on ne fait rien
+    }
+
+    // Vérifier si le serveur a un salon de log configuré
+    const logChannelId = logSettings[newMember.guild.id];
+    if (!logChannelId) {
+        console.log(`Pas de salon de log configuré pour le serveur ${newMember.guild.id}`);
+        return;
+    }
+
+    // Récupérer le salon de log
+    const logChannel = newMember.guild.channels.cache.get(logChannelId);
+    if (!logChannel) {
+        console.log(`Le salon de log n'a pas été trouvé dans le serveur ${newMember.guild.id}`);
+        return;
+    }
+
+    // Préparer l'embed avec les informations du changement de pseudo
+    const embed = new EmbedBuilder()
+        .setColor('#FF9900')
+        .setTitle('Changement de pseudo')
+        .setDescription(`Le pseudo de **${newMember.user.tag}** (ID: ${newMember.id}) a changé !`)
+        .addFields(
+            { name: 'Ancien pseudo', value: oldMember.nickname || oldMember.user.username, inline: true },
+            { name: 'Nouveau pseudo', value: newMember.nickname || newMember.user.username, inline: true }
+        )
+        .setTimestamp()
+        .setFooter({ text: 'Système de log de changement de pseudo' });
+
+    // Envoyer l'embed dans le salon de log
+    try {
+        await logChannel.send({ embeds: [embed] });
+        console.log(`Log du changement de pseudo envoyé dans ${logChannel.name}`);
+    } catch (error) {
+        console.error('Erreur lors de l\'envoi du log :', error);
+    }
+};

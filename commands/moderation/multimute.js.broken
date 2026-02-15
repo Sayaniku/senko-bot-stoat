@@ -1,0 +1,162 @@
+const SympactEmbedBuilder = require('../../lib/EmbedBuilder');
+const fs = require('fs');
+const path = require('path');
+const ms = require('ms');
+const prettyMs = require('pretty-ms');
+
+const settingsPath = path.join(__dirname, '../../logSettings.json');
+
+module.exports = {
+    name: 'multimute',
+    aliases: ['mm'],
+    description: 'Mute plusieurs utilisateurs.',
+    usage: '!multimute <@user1> <@user2> ... <durée> [raison]',
+    permissions: ['ManageServer'],
+
+    execute: async (client, message, args) => {
+        // Vérifier le serveur
+        if (!message.channel.server) {
+            return await message.reply("❌ Cette commande ne fonctionne que dans un serveur.");
+        }
+
+        const server = message.channel.server;
+        const member = await server.fetchMember(message.author.id);
+
+        // Vérifier permissions
+        const isOwner = server.owner === message.author.id;
+        const hasPermission = isOwner || member.hasPermission(message.channel, "ManageServer");
+
+        if (!hasPermission) {
+            return await message.reply("❌ Vous devez avoir la permission de mute.");
+        }
+
+        // Parser les arguments (au moins 2 : un user et une durée)
+        if (args.length < 2) {
+            return await message.reply(`❌ Usage: \`${this.usage}\``);
+        }
+
+        // Extraire les utilisateurs mentionnés
+        const userMatches = [];
+        let i = 0;
+
+        for (i = 0; i < args.length; i++) {
+            const userMatch = args[i].match(/<@([A-Z0-9]+)>/i);
+            if (!userMatch) {
+                // C'est la durée
+                break;
+            }
+            userMatches.push(args[i]);
+        }
+
+        // Vérifier qu'on a au moins un utilisateur et une durée
+        if (userMatches.length === 0 || i === args.length) {
+            return await message.reply(`❌ Usage: \`${this.usage}\``);
+        }
+
+        const duration = args[i];
+        const reason = args.slice(i + 1).join(' ') || 'Aucune raison fournie';
+
+        try {
+            // Convertir la durée
+            const msDuration = ms(duration);
+            if (isNaN(msDuration)) {
+                return await message.reply("❌ Merci de mettre un temps valide (ex: `10m`, `1h`, `1d`).");
+            }
+
+            if (msDuration < 5000 || msDuration > 2.419e9) {
+                return await message.reply("❌ Le mute doit durer entre 5 secondes et 28 jours maximum.");
+            }
+
+            const prettyDuration = prettyMs(msDuration, { verbose: true });
+            let successCount = 0;
+            let failureCount = 0;
+            const mutedUsers = [];
+
+            // Mute chaque utilisateur
+            for (const userMention of userMatches) {
+                const userMatch = userMention.match(/<@([A-Z0-9]+)>/i);
+                if (!userMatch) continue;
+
+                const targetUserId = userMatch[1];
+
+                try {
+                    // Vérifier que l'utilisateur existe dans le serveur
+                    const targetMember = await server.fetchMember(targetUserId).catch(() => null);
+
+                    if (!targetMember) {
+                        failureCount++;
+                        continue;
+                    }
+
+                    // Vérifier les hiérarchies de rôles
+                    // Note: ranking plus petit = priorité plus haute
+                    const targetRanking = targetMember.ranking;
+                    const memberRanking = member.ranking;
+
+                    if (targetRanking <= memberRanking) {
+                        failureCount++;
+                        continue;
+                    }
+
+                    // Appliquer le mute
+                    await targetMember.timeout(msDuration, reason);
+                    const targetUser = client.users.get(targetUserId);
+                    const userDisplay = targetUser ? `**${targetUser.username}**` : `<@${targetUserId}>`;
+                    mutedUsers.push(userDisplay);
+                    successCount++;
+
+                } catch (error) {
+                    console.error(`Erreur lors du mute de ${targetUserId}:`, error);
+                    failureCount++;
+                }
+            }
+
+            // Réponse
+            let replyMsg = `✅ ${successCount} utilisateur(s) mute(s) pendant ${prettyDuration}.\nRaison: ${reason}`;
+            if (failureCount > 0) {
+                replyMsg += `\n⚠️ ${failureCount} utilisateur(s) n'ont pas pu être mutés.`;
+            }
+            if (mutedUsers.length > 0) {
+                replyMsg += `\n\nUtilisateurs mutés: ${mutedUsers.join(', ')}`;
+            }
+
+            await message.reply(replyMsg);
+
+            // Envoyer dans le salon de logs
+            try {
+                if (fs.existsSync(settingsPath)) {
+                    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+                    const logChannelId = settings[server.id];
+
+                    if (logChannelId) {
+                        const logChannel = client.channels.get(logChannelId);
+                        if (logChannel) {
+                            const embed = new SympactEmbedBuilder()
+                                .setTitle('🔇 Multi-mute effectué')
+                                .setDescription(
+                                    `${successCount} utilisateur(s) muté(s) par ${message.author}` +
+                                    `\nDurée: ${prettyDuration}` +
+                                    `\nRaison: ${reason}` +
+                                    (failureCount > 0 ? `\n${failureCount} ont échoué` : '')
+                                )
+                                .setColor("#FFCC00")
+                                .build();
+
+                            await logChannel.sendMessage({ embeds: [embed] }).catch(console.error);
+                        }
+                    }
+                }
+            } catch (logErr) {
+                console.error('Erreur lors de l\'envoi du log:', logErr);
+            }
+
+        } catch (error) {
+            console.error(`Erreur lors du multimute: ${error}`);
+            await message.reply("❌ Une erreur est survenue lors du multimute.");
+        }
+    }
+};
+
+
+
+
