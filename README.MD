@@ -31,4 +31,5 @@ Token Twitch
 
 -----------------
 
-Reste plus qu'a lancer le bot avec ``node .`` si tout les etapes au dessus sont reussi
+Reste plus qu'a lancer le bot avec ``node .`` si tout les etapes au dessus sont reussi, MAIS, oubliez pas d'inviter le bot sur votre serveur Stoat ;)
+
