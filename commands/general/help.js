@@ -7,6 +7,7 @@ module.exports = {
             - !liststreamers => Affiche la liste des streamers qui sont annonce + le salon.
             - !registerstreamer [streamer] (role) [#salon] => Enregistre un streamer et le salon ou il annonce (et un ping en option).
             - !unregisterstreamer [streamer] => Supprime un streamer de la liste et son annonce.
+            - !setlogs [#salon] => permet de définir un salon pour les logs [EN BETA ENCORE]
         Moderateur : 
             - !ban [@user] (raison) => Bannir un utilisateur du serveur.
             - !kick [@user] (raison) => Expulser un utilisateur du serveur.
